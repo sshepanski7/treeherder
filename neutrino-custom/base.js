@@ -214,6 +214,9 @@ module.exports = neutrino => {
 
     neutrino.config.devtool('source-map');
 
+    // Ensure local modules are used before those in the root node_modules directory.
+    // This workaround won't be needed once using newer versions of Neutrino.
+    neutrino.config.resolve.modules.prepend('node_modules');
 };
 
 module.exports.CWD = CWD;
