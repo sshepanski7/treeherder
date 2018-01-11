@@ -18,10 +18,6 @@ def server_supports_tls(url):
     # but until Travis has support it's not overly useful.
     return hostname != 'localhost'
 
-
-TREEHERDER_MEMCACHED = env("TREEHERDER_MEMCACHED", default="127.0.0.1:11211")
-TREEHERDER_MEMCACHED_KEY_PREFIX = env("TREEHERDER_MEMCACHED_KEY_PREFIX", default="treeherder")
-
 DEBUG = env.bool("TREEHERDER_DEBUG", default=False)
 ENABLE_DEBUG_TOOLBAR = env.bool("ENABLE_DEBUG_TOOLBAR", False)
 
@@ -601,39 +597,35 @@ for alias in DATABASES:
             'ca': 'deployment/aws/combined-ca-bundle.pem',
         }
 
-# TREEHERDER_MEMCACHED is a string of comma-separated address:port pairs
-# NB: On Heroku this will be set to localhost, so that the connection
-# occurs via the stunnel established by memcachier-tls-buildpack.
-MEMCACHED_LOCATION = TREEHERDER_MEMCACHED.strip(',').split(',')
+# TODO:
+# fix django-redis docs saying that only max connections can be overridden + give SSL example
+# open redis-py issue for changing default of `None` for SSL cert validation (or at least emphasising in the docs)
+# get heroku to fix main docs page saying "SSL not possible" + switch to django-redis + add non-stunnel steps for python too
+
+REDIS_URL = env('REDIS_URL')
+
+if 'DYNO' in env:
+    # See https://devcenter.heroku.com/articles/securing-heroku-redis#connecting-directly-to-stunnel
+    # redis:// --> rediss://
+    # port number + 1
+    # redis://h:PASSWORD@ec2-52-44-231-209.compute-1.amazonaws.com:8409
+    # --> rediss://[:password]@localhost:6379/0
+    REDIS_URL = 'TODO'
 
 CACHES = {
-    "default": {
-        "BACKEND": "django_pylibmc.memcached.PyLibMCCache",
-        "LOCATION": MEMCACHED_LOCATION,
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': REDIS_URL,
+        # TODO: Decide whether we should use a different default and instead set None explicitly per-use
         # Cache forever
-        "TIMEOUT": None,
-        # bumping this is effectively equivalent to restarting memcached
-        "VERSION": 1,
-    },
+        'TIMEOUT': None,
+        'OPTIONS': {
+            # Override the default None timeout, to prevent hangs.
+            'SOCKET_CONNECT_TIMEOUT': 5,
+            'SOCKET_TIMEOUT': 5,
+        }
+    }
 }
-
-KEY_PREFIX = TREEHERDER_MEMCACHED_KEY_PREFIX
-
-# This code handles the memcachier service on heroku.
-# TODO: Stop special-casing Heroku and use newer best practices from:
-# https://www.memcachier.com/documentation#django.
-if 'DYNO' in env:
-    # Prefs taken from:
-    # https://github.com/rdegges/django-heroku-memcacheify/blob/v1.0.0/memcacheify.py#L30-L39
-    CACHES['default'].update({
-        "BINARY": True,
-        "USERNAME": env('MEMCACHIER_USERNAME', default=None),
-        "PASSWORD": env('MEMCACHIER_PASSWORD', default=None),
-        "OPTIONS": {
-            "ketama": True,
-            "tcp_nodelay": True,
-        },
-    })
 
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {},
